@@ -1,0 +1,14 @@
+nodes:
+  - id: agent
+    custom:
+      inputs:
+        tick: dora/timer/millis/400
+      outputs:
+      source: shell
+      args: >
+        python3 $SIMULATE --output 
+        --oasJson --criteriaConfig $CRITERIA
+        --openscenario $XOSC
+        --agent $TEAM_AGENT
+        --agentConfig $TEAM_AGENT_CONF
+        --destination $DISTINATION
