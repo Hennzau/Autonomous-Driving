@@ -4,14 +4,18 @@ import importlib
 import inspect
 import os
 import sys
+import time
 import traceback
 
+import py_trees
 from dora import Node
 
 import carla
 
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.scenario_manager import ScenarioManager
+from srunner.scenariomanager.timer import GameTime
+from srunner.scenariomanager.watchdog import Watchdog
 from srunner.tools.scenario_parser import ScenarioConfigurationParser
 
 """
@@ -47,8 +51,8 @@ def get_scenario_class_or_fail(scenario):
     sys.exit(-1)
 
 
-def cleanup(scenario, ego_vehicles):
-    scenario.cleanup()
+def cleanup(ego_vehicles):
+    CarlaDataProvider.cleanup()
 
     CarlaDataProvider.cleanup()
 
@@ -59,6 +63,16 @@ def cleanup(scenario, ego_vehicles):
                 ego_vehicles[i].destroy()
             ego_vehicles[i] = None
     ego_vehicles = []
+
+
+def vehicle_control():
+    control = carla.VehicleControl()
+    control.steer = 0.0
+    control.throttle = 0.5
+    control.brake = 0.0
+    control.hand_brake = False
+
+    return control
 
 
 def main():
@@ -84,7 +98,7 @@ def main():
     # --------------
 
     client = carla.Client('127.0.0.1', 2000)
-    scenario_manager = ScenarioManager(args.debug, args.sync, args.timeout)
+    client.set_timeout(float (args.timeout))
 
     scenario_configurations = ScenarioConfigurationParser.parse_scenario_configuration(
         args.scenario,
@@ -93,6 +107,7 @@ def main():
     config = scenario_configurations[0]
 
     world = client.load_world(config.town)
+    world = client.get_world()
 
     CarlaDataProvider.set_client(client)
     CarlaDataProvider.set_world(world)
@@ -109,54 +124,43 @@ def main():
     ego_vehicles = []
 
     print("Preparing scenario: " + config.name)
-    try:
 
-        # ---- prepare ego vehicles
+    # ---- prepare ego vehicles
 
-        for vehicle in config.ego_vehicles:
-            ego_vehicles.append(CarlaDataProvider.request_new_actor(vehicle.model,
-                                                                    vehicle.transform,
-                                                                    vehicle.rolename,
-                                                                    color=vehicle.color,
-                                                                    actor_category=vehicle.category))
-        if CarlaDataProvider.is_sync_mode():
-            world.tick()
-        else:
-            world.wait_for_tick()
+    for vehicle in config.ego_vehicles:
+        ego_vehicles.append(CarlaDataProvider.request_new_actor(vehicle.model,
+                                                                vehicle.transform,
+                                                                vehicle.rolename,
+                                                                color=vehicle.color,
+                                                                actor_category=vehicle.category))
+    if CarlaDataProvider.is_sync_mode():
+        world.tick()
+    else:
+        world.wait_for_tick()
 
-        # ----
+    # ----
 
-        scenario_class = get_scenario_class_or_fail(config.type)
-        scenario = scenario_class(world,
-                                  ego_vehicles,
-                                  config,
-                                  False,
-                                  False)
-
-    except Exception as exception:  # pylint: disable=broad-except
-        print("The scenario cannot be loaded")
-        traceback.print_exc()
-
-        print(exception)
-
-        cleanup(scenario_manager, ego_vehicles)
+    scenario_class = get_scenario_class_or_fail(config.type)
+    scenario = scenario_class(world,
+                              ego_vehicles,
+                              config,
+                              False,
+                              False)
 
     # Load scenario and run it
-    scenario_manager.load_scenario(scenario, None)
 
     node = Node()
 
-    print("BEFORE NODE")
-
     for event in node:
         if event['id'] == 'tick':
-            print("TICK RECEIVED")
+            CarlaDataProvider.on_carla_tick()
+            scenario.scenario.scenario_tree.tick_once()
 
-            # scenario_manager.run_scenario()
+            scenario.ego_vehicles[0].apply_control(vehicle_control())
 
     scenario.remove_all_actors()
 
-    cleanup(scenario_manager, ego_vehicles)
+    cleanup(ego_vehicles)
 
 
 if __name__ == "__main__":

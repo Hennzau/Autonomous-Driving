@@ -2,6 +2,6 @@ nodes:
   - id: runner
     custom:
       inputs:
-        tick: dora/timer/secs/1
+        tick: dora/timer/millis/20
       source: python3
       args: ./operators/runner/runner.py
