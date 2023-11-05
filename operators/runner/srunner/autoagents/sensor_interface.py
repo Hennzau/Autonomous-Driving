@@ -70,6 +70,7 @@ class CallBack(object):
         array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
         array = copy.deepcopy(array)
         array = np.reshape(array, (image.height, image.width, 4))
+
         self._data_provider.update_sensor(tag, array, image.frame)
 
     def _parse_lidar_cb(self, lidar_data, tag):
@@ -79,6 +80,7 @@ class CallBack(object):
         points = np.frombuffer(lidar_data.raw_data, dtype=np.dtype('f4'))
         points = copy.deepcopy(points)
         points = np.reshape(points, (int(points.shape[0] / 4), 4))
+
         self._data_provider.update_sensor(tag, points, lidar_data.frame)
 
     def _parse_radar_cb(self, radar_data, tag):

@@ -45,6 +45,7 @@ class AgentWrapper(object):
         :return:
         """
         bp_library = CarlaDataProvider.get_world().get_blueprint_library()
+
         for sensor_spec in self._agent.sensors():
             # These are the sensors spawned on the carla world
             bp = bp_library.find(str(sensor_spec['type']))

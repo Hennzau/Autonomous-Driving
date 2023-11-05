@@ -45,6 +45,7 @@ VERSION = '0.9.13'
 
 
 class ScenarioRunner(object):
+
     """
     This is the core scenario runner module. It is responsible for
     running (and repeating) a single scenario or a list of scenarios.
@@ -60,7 +61,7 @@ class ScenarioRunner(object):
     # Tunable parameters
     client_timeout = 10.0  # in seconds
     wait_for_world = 20.0  # in seconds
-    frame_rate = 20.0  # in Hz
+    frame_rate = 20.0      # in Hz
 
     # CARLA world and scenario handlers
     world = None
@@ -92,6 +93,13 @@ class ScenarioRunner(object):
         dist = pkg_resources.get_distribution("carla")
         if LooseVersion(dist.version) < LooseVersion('0.9.12'):
             raise ImportError("CARLA version 0.9.12 or newer required. CARLA version found: {}".format(dist))
+
+        # Load agent if requested via command line args
+        # If something goes wrong an exception will be thrown by importlib (ok here)
+        if self._args.agent is not None:
+            module_name = os.path.basename(args.agent).split('.')[0]
+            sys.path.insert(0, os.path.dirname(args.agent))
+            self.module_agent = importlib.import_module(module_name)
 
         # Create the ScenarioManager
         self.manager = ScenarioManager(self._args.debug, self._args.sync, self._args.timeout)
@@ -348,6 +356,17 @@ class ScenarioRunner(object):
             self._cleanup()
             return False
 
+        if self._args.agent:
+            agent_class_name = self.module_agent.__name__.title().replace('_', '')
+            try:
+                self.agent_instance = getattr(self.module_agent, agent_class_name)(self._args.agentConfig)
+                config.agent = self.agent_instance
+            except Exception as e:          # pylint: disable=broad-except
+                traceback.print_exc()
+                print("Could not setup required agent due to {}".format(e))
+                self._cleanup()
+                return False
+
         CarlaDataProvider.set_traffic_manager_port(int(self._args.trafficManagerPort))
         tm = self.client.get_trafficmanager(int(self._args.trafficManagerPort))
         tm.set_random_device_seed(int(self._args.trafficManagerSeed))
@@ -358,15 +377,24 @@ class ScenarioRunner(object):
         print("Preparing scenario: " + config.name)
         try:
             self._prepare_ego_vehicles(config.ego_vehicles)
-
-            scenario_class = self._get_scenario_class_or_fail(config.type)
-            scenario = scenario_class(self.world,
-                                      self.ego_vehicles,
-                                      config,
-                                      self._args.randomize,
-                                      self._args.debug)
-
-        except Exception as exception:  # pylint: disable=broad-except
+            if self._args.openscenario:
+                scenario = OpenScenario(world=self.world,
+                                        ego_vehicles=self.ego_vehicles,
+                                        config=config,
+                                        config_file=self._args.openscenario,
+                                        timeout=100000)
+            elif self._args.route:
+                scenario = RouteScenario(world=self.world,
+                                         config=config,
+                                         debug_mode=self._args.debug)
+            else:
+                scenario_class = self._get_scenario_class_or_fail(config.type)
+                scenario = scenario_class(self.world,
+                                          self.ego_vehicles,
+                                          config,
+                                          self._args.randomize,
+                                          self._args.debug)
+        except Exception as exception:                  # pylint: disable=broad-except
             print("The scenario cannot be loaded")
             traceback.print_exc()
             print(exception)
@@ -394,7 +422,7 @@ class ScenarioRunner(object):
 
             result = True
 
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:              # pylint: disable=broad-except
             traceback.print_exc()
             print(e)
             result = False
@@ -412,7 +440,6 @@ class ScenarioRunner(object):
         scenario_configurations = ScenarioConfigurationParser.parse_scenario_configuration(
             self._args.scenario,
             self._args.configFile)
-
         if not scenario_configurations:
             print("Configuration for scenario {} cannot be found!".format(self._args.scenario))
             return result
@@ -426,13 +453,62 @@ class ScenarioRunner(object):
             self._cleanup()
         return result
 
+    def _run_route(self):
+        """
+        Run the route scenario
+        """
+        result = False
+
+        if self._args.route:
+            routes = self._args.route[0]
+            scenario_file = self._args.route[1]
+            single_route = None
+            if len(self._args.route) > 2:
+                single_route = self._args.route[2]
+
+        # retrieve routes
+        route_configurations = RouteParser.parse_routes_file(routes, scenario_file, single_route)
+
+        for config in route_configurations:
+            for _ in range(self._args.repetitions):
+                result = self._load_and_run_scenario(config)
+
+                self._cleanup()
+        return result
+
+    def _run_openscenario(self):
+        """
+        Run a scenario based on OpenSCENARIO
+        """
+
+        # Load the scenario configurations provided in the config file
+        if not os.path.isfile(self._args.openscenario):
+            print("File does not exist")
+            self._cleanup()
+            return False
+
+        openscenario_params = {}
+        if self._args.openscenarioparams is not None:
+            for entry in self._args.openscenarioparams.split(','):
+                [key, val] = [m.strip() for m in entry.split(':')]
+                openscenario_params[key] = val
+        config = OpenScenarioConfiguration(self._args.openscenario, self.client, openscenario_params)
+
+        result = self._load_and_run_scenario(config)
+        self._cleanup()
+        return result
+
     def run(self):
         """
         Run all scenarios according to provided commandline args
         """
         result = True
-
-        result = self._run_scenarios()
+        if self._args.openscenario:
+            result = self._run_openscenario()
+        elif self._args.route:
+            result = self._run_route()
+        else:
+            result = self._run_scenarios()
 
         print("No more scenarios .... Exiting")
         return result
@@ -464,8 +540,7 @@ def main():
     parser.add_argument('--list', action="store_true", help='List all supported scenarios and exit')
 
     parser.add_argument(
-        '--scenario',
-        help='Name of the scenario to be executed. Use the preposition \'group:\' to run all scenarios of one class, e.g. ControlLoss or FollowLeadingVehicle')
+        '--scenario', help='Name of the scenario to be executed. Use the preposition \'group:\' to run all scenarios of one class, e.g. ControlLoss or FollowLeadingVehicle')
     parser.add_argument('--openscenario', help='Provide an OpenSCENARIO definition')
     parser.add_argument('--openscenarioparams', help='Overwrited for OpenSCENARIO ParameterDeclaration')
     parser.add_argument(
@@ -530,7 +605,7 @@ def main():
     try:
         scenario_runner = ScenarioRunner(arguments)
         result = scenario_runner.run()
-    except Exception:  # pylint: disable=broad-except
+    except Exception:   # pylint: disable=broad-except
         traceback.print_exc()
 
     finally:

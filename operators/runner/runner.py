@@ -1,4 +1,3 @@
-import argparse
 import glob
 import importlib
 import inspect
@@ -12,6 +11,9 @@ from dora import Node
 
 import carla
 
+import copy
+import numpy as np
+
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.scenario_manager import ScenarioManager
 from srunner.scenariomanager.timer import GameTime
@@ -19,8 +21,10 @@ from srunner.scenariomanager.watchdog import Watchdog
 from srunner.tools.scenario_parser import ScenarioConfigurationParser
 
 """
-Node that will manage the Agent 'agent.py' and the communication with CARLA Server
+Node that will manage the Agent 'my_agent.py' and the communication with CARLA Server
 """
+
+from my_agent import MyAgent
 
 
 def get_scenario_class_or_fail(scenario):
@@ -52,7 +56,9 @@ def get_scenario_class_or_fail(scenario):
 
 
 def cleanup(ego_vehicles):
-    CarlaDataProvider.cleanup()
+    for sensor in sensors:
+        sensor.stop()
+        sensor.destroy()
 
     CarlaDataProvider.cleanup()
 
@@ -65,44 +71,176 @@ def cleanup(ego_vehicles):
     ego_vehicles = []
 
 
-def vehicle_control():
-    control = carla.VehicleControl()
-    control.steer = 0.0
-    control.throttle = 0.5
-    control.brake = 0.0
-    control.hand_brake = False
+# -----------
 
-    return control
+# --- sensors
+
+# couple (id , data [buffer])
+camera = ()
+lidar = ()
+gnss = ()
+imu = ()
+radar = ()
+
+sensors = []
+
+
+def on_camera(data):
+    global camera
+
+    camera = ('camera', np.frombuffer(data.raw_data, np.uint8))
+
+
+def on_lidar(data):
+    global lidar
+
+    frame = np.frombuffer(data.raw_data, np.float32)
+    point_cloud = np.reshape(frame, (-1, 4))
+    point_cloud = point_cloud[:, :3]
+
+    lidar = ('lidar', point_cloud)
+
+
+def on_gnss(data):
+    global gnss
+
+    array = np.array([data.latitude,
+                      data.longitude,
+                      data.altitude], dtype=np.float64)
+
+    gnss = ('GPS', array)
+
+
+def on_imu(data):
+    global imu
+
+    array = np.array([data.accelerometer.x,
+                      data.accelerometer.y,
+                      data.accelerometer.z,
+                      data.gyroscope.x,
+                      data.gyroscope.y,
+                      data.gyroscope.z,
+                      data.compass,
+                      ], dtype=np.float64)
+
+    imu = ('IMU', array)
+
+
+def on_radar(data):
+    global radar
+
+    points = np.frombuffer(data.raw_data, dtype=np.dtype('f4'))
+    points = copy.deepcopy(points)
+    points = np.reshape(points, (int(points.shape[0] / 4), 4))
+    points = np.flip(points, 1)
+
+    radar = ('radar', points)
+
+
+# -----------
+
+def setup_sensors(agent, vehicle):
+    global sensors
+    bp_library = CarlaDataProvider.get_world().get_blueprint_library()
+
+    for sensor_spec in agent.sensors():
+
+        bp = None
+        sensor_location = None
+        sensor_rotation = None
+
+        if sensor_spec['type'].startswith('sensor.camera'):
+            bp = bp_library.find(str(sensor_spec['type']))
+            bp.set_attribute('image_size_x', str(sensor_spec['width']))
+            bp.set_attribute('image_size_y', str(sensor_spec['height']))
+            bp.set_attribute('fov', str(sensor_spec['fov']))
+
+            sensor_location = carla.Location(x=sensor_spec['x'],
+                                             y=sensor_spec['y'],
+                                             z=sensor_spec['z'])
+
+            sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
+                                             roll=sensor_spec['roll'],
+                                             yaw=sensor_spec['yaw'])
+
+        elif sensor_spec['type'].startswith('sensor.lidar.ray_cast'):
+            bp = bp_library.find(str(sensor_spec['type']))
+            sensor_location = carla.Location(x=sensor_spec['x'],
+                                             y=sensor_spec['y'],
+                                             z=sensor_spec['z'])
+
+            sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
+                                             roll=sensor_spec['roll'],
+                                             yaw=sensor_spec['yaw'])
+
+        elif sensor_spec['type'].startswith('sensor.other.gnss'):
+            bp = bp_library.find(str(sensor_spec['type']))
+
+            sensor_location = carla.Location(x=sensor_spec['x'],
+                                             y=sensor_spec['y'],
+                                             z=sensor_spec['z'])
+
+            sensor_rotation = carla.Rotation()
+
+        elif sensor_spec['type'].startswith('sensor.other.imu'):
+            bp = bp_library.find(str(sensor_spec['type']))
+
+            sensor_location = carla.Location(x=sensor_spec['x'],
+                                             y=sensor_spec['y'],
+                                             z=sensor_spec['z'])
+
+            sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
+                                             roll=sensor_spec['roll'],
+                                             yaw=sensor_spec['yaw'])
+
+        elif sensor_spec['type'].startswith('sensor.other.radar'):
+            bp = bp_library.find(str(sensor_spec['type']))
+
+            sensor_location = carla.Location(x=sensor_spec['x'],
+                                             y=sensor_spec['y'],
+                                             z=sensor_spec['z'])
+
+            sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
+                                             roll=sensor_spec['roll'],
+                                             yaw=sensor_spec['yaw'])
+        else:
+            break
+
+        # create sensor
+        sensor_transform = carla.Transform(sensor_location, sensor_rotation)
+        sensor = CarlaDataProvider.get_world().spawn_actor(bp, sensor_transform, vehicle)
+        sensors.append(sensor)
+
+        # setup callback
+
+        if sensor_spec['type'].startswith('sensor.camera'):
+            sensor.listen(on_camera)
+
+        elif sensor_spec['type'].startswith('sensor.lidar.ray_cast'):
+            sensor.listen(on_lidar)
+
+        elif sensor_spec['type'].startswith('sensor.other.gnss'):
+            sensor.listen(on_gnss)
+
+        elif sensor_spec['type'].startswith('sensor.other.imu'):
+            sensor.listen(on_imu)
+
+        elif sensor_spec['type'].startswith('sensor.other.radar'):
+            sensor.listen(on_radar)
+
+        # Tick once to spawn the sensors
+        CarlaDataProvider.get_world().tick()
 
 
 def main():
-    # ---------------
-
-    parser = argparse.ArgumentParser(description="Dora-Drives x Scenario Runner",
-                                     formatter_class=argparse.RawTextHelpFormatter)
-
-    parser.add_argument('--timeout', default="10.0",
-                        help='Set the CARLA client timeout value in seconds')
-
-    parser.add_argument('--sync', action='store_true',
-                        help='Forces the simulation to run synchronously')
-
-    parser.add_argument('--debug', action="store_true", help='Run with debug output')
-
-    parser.add_argument('--scenario', default='FollowLeadingVehicle_1', help='')
-
-    parser.add_argument('--configFile', default='', help='Provide an additional scenario configuration file (*.xml)')
-
-    args = parser.parse_args()
-
     # --------------
 
     client = carla.Client('127.0.0.1', 2000)
-    client.set_timeout(float (args.timeout))
+    client.set_timeout(20.0)
 
     scenario_configurations = ScenarioConfigurationParser.parse_scenario_configuration(
-        args.scenario,
-        args.configFile)
+        'FollowLeadingVehicle_1',
+        '')
 
     config = scenario_configurations[0]
 
@@ -147,16 +285,31 @@ def main():
                               False,
                               False)
 
-    # Load scenario and run it
+    # load personalized agent 'my_agent' (initialize sensors etc...)
 
-    node = Node()
+    my_agent = MyAgent()
+    my_agent.setup(None, None)
 
-    for event in node:
+    setup_sensors(my_agent, ego_vehicles[0])
+
+    # run scenario and my_agent.py
+
+    for event in my_agent.node:
         if event['id'] == 'tick':
             CarlaDataProvider.on_carla_tick()
             scenario.scenario.scenario_tree.tick_once()
 
-            scenario.ego_vehicles[0].apply_control(vehicle_control())
+            # manage data to provide to the agent
+
+            input_data = {
+                camera[0]: (0, camera[1]),
+                lidar[0]: (0, lidar[1]),
+                gnss[0]: (0, gnss[1]),
+                imu[0]: (0, imu[1]),
+                radar[0]: (0, radar[1])
+            }
+
+            scenario.ego_vehicles[0].apply_control(my_agent.run_step(input_data, 0))
 
     scenario.remove_all_actors()
 
