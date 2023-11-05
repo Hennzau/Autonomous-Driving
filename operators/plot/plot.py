@@ -3,19 +3,13 @@ from dora import DoraStatus
 
 import carla
 import random
-import pygame
 import numpy as np
+
+import cv2
 
 """
 This operator is not usable during oasis competition, it displays camera output and some data
 """
-
-
-class RenderObject(object):
-    def __init__(self, width, height):
-        init_image = np.random.randint(0, 255, (height, width, 3), dtype='uint8')
-
-        self.surface = pygame.surfarray.make_surface(init_image.swapaxes(0, 1))
 
 
 class Operator:
@@ -24,16 +18,8 @@ class Operator:
         self.client.set_timeout(60)
         self.world = self.client.get_world()
 
-        self.render_object = RenderObject(1280, 720)
-
-        pygame.init()
-
-        self.game_display = pygame.display.set_mode((1280, 720), pygame.HWSURFACE | pygame.DOUBLEBUF)
-
-        self.game_display.fill((0, 0, 0))
-        self.game_display.blit(self.render_object.surface, (0, 0))
-
-        pygame.display.flip()
+        self.width = 640
+        self.height = 640
 
         print("Plot connected and ready to display something")
 
@@ -51,23 +37,19 @@ class Operator:
             dora_input: dict,
             send_output: Callable[[str, bytes, Optional[dict]], None],
     ):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return DoraStatus.STOP
-
         if dora_input["id"] == "image":
             camera_frame = np.frombuffer(
                 dora_input["data"],
                 np.uint8,
-            ).reshape((1280, 720, 4))
+            ).reshape((self.width, self.height, 4))
 
-            # self.render_object.surface = pygame.surfarray.make_surface(image.swapaxes(0, 1))
+            resized_image = camera_frame[:, :, :3]
+            resized_image = np.ascontiguousarray(resized_image, np.uint8)
 
-        self.game_display.blit(self.render_object.surface, (0, 0))
-
-        pygame.display.flip()
+            cv2.imshow("image", resized_image)
+            cv2.waitKey(1)
 
         return DoraStatus.CONTINUE
 
     def __del__(self):
-        pygame.quit()
+        pass
