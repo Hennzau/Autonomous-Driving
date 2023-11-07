@@ -36,7 +36,7 @@ def get_scenario_class_or_fail(scenario):
     """
 
     # Path of all scenario at "srunner/scenarios" folder + the path of the additional scenario argument
-    scenarios_list = glob.glob("srunner/scenarios/*.py")
+    scenarios_list = glob.glob("operators/oasis_agent/srunner/scenarios/*.py")
 
     for scenario_file in scenarios_list:
 

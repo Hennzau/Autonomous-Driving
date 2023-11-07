@@ -13,22 +13,23 @@ nodes:
       source: python3
       args: ./operators/oasis_agent/oasis_agent.py
 
-  - id: plot
-    operator:
-      python: operators/plot/plot.py
-      inputs:
-        bbox: bbox_recognition/bbox
-        image: oasis_agent/image
-
-  - id: bbox_recognition
+  - id: yolov_filter
     operator:
       outputs:
         - bbox
+        - image
       inputs:
         image: oasis_agent/image
-      python: operators/bbox_recognition/yolov5_op.py
+      python: operators/yolov_filter/yolov5_op.py
     env:
       PYTORCH_DEVICE: cuda
       YOLOV5_PATH: dependencies/yolov5
       YOLOV5_WEIGHT_PATH: dependencies/yolov5/yolov5n.pt
+
+  - id: plot
+    operator:
+      python: operators/plot/plot.py
+      inputs:
+        bbox: yolov_filter/bbox
+        image: yolov_filter/image
 

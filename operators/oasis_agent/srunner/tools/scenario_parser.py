@@ -18,7 +18,6 @@ from srunner.scenarioconfigs.route_scenario_configuration import RouteConfigurat
 
 
 class ScenarioConfigurationParser(object):
-
     """
     Pure static class providing access to parser methods for scenario configuration files (*.xml)
     """
@@ -34,7 +33,7 @@ class ScenarioConfigurationParser(object):
         scenario that matches the scenario_name is parsed and returned.
         """
 
-        list_of_config_files = glob.glob("srunner/examples/*.xml")
+        list_of_config_files = glob.glob("operators/oasis_agent/srunner/examples/*.xml")
 
         if config_file_name != '':
             list_of_config_files.append(config_file_name)
@@ -83,7 +82,6 @@ class ScenarioConfigurationParser(object):
                     new_config.weather.wetness = float(weather.attrib.get("wetness", 0.0))
 
                 for ego_vehicle in scenario.iter("ego_vehicle"):
-
                     new_config.ego_vehicles.append(ActorConfigurationData.parse_from_node(ego_vehicle, 'hero'))
                     new_config.trigger_points.append(new_config.ego_vehicles[-1].transform)
 
@@ -105,8 +103,8 @@ class ScenarioConfigurationParser(object):
         Parse *all* config files and provide a list with all scenarios @return
         """
 
-        list_of_config_files = glob.glob("{}/srunner/examples/*.xml".format(os.getenv('SCENARIO_RUNNER_ROOT', "/")))
-        list_of_config_files += glob.glob("{}/srunner/examples/*.xosc".format(os.getenv('SCENARIO_RUNNER_ROOT', "/")))
+        list_of_config_files = glob.glob("operators/oasis_agent/srunner/examples/*.xml")
+        list_of_config_files += glob.glob("operators/oasis_agent/srunner/examples/*.xosc")
 
         if config_file_name != '':
             list_of_config_files.append(config_file_name)
