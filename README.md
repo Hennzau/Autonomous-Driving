@@ -28,7 +28,26 @@ Après quelques instants, CARLA Server devrait être opérationnel, vous aurez d
 
 Le développement de cette voiture sur simulateur se fait sous deux axes : du code Python, et la description d'un graph. En fait DORA est un framework qui permet de créer de manière isolé des opérateurs (operator) qui reçoivent des entrées (inputs) et renvoient des sorties (outputs). La description du graphe nous permet alors de rediriger les sorties et les entrées sur les différents opérateurs que l'on créer.
 
-Par exemple il y'a un opérateur "yolov_filter" qui s'occupe de récupérer une image, et qui nous renvoie cette image accompagnée d'une liste contenant les différents objets que yolov a réussi à identifier (cela consiste en "dans cette zone là de l'image je vois une voiture, dans cette zone là je vois un panneau stop"...). Et bien notre jeu dans le graph va être de lui donner la bonne image que l'on souhaite, et de renvoyer ses sorties à d'autres opérateurs, ou comme actuellement, a un opérateur de rendu, qui nous permet d'afficher les différentes données de notre voiture afin de monitorer son développement.
+Voici les différents éléments de ce repository : 
 
+- oasis_agent.yaml : Il s'agit du graph du projet. DORA analyse ce graph et éxécute tout comme il faut. DORA peut aussi afficher les différents opérateurs présents dans le projet et les liens qui existent entre les opérateurs
 
+- operators/oasis_agent : il s'agit de l'opérateur le plus important. En réalité il ne s'agit pas d'un opérateur comme les autres mais d'un custom-node. C'est à dire que contrairement aux opérateurs, il ne fait pas que recevoir des informations et d'en renvoyer, c'est un programme éxécutable à part entière qui a le droit de communiquer avec le réseau d'opérateurs. Ici le module oasis_agent.py est éxécuté par DORA, il se charge de communiquer avec le serveur CARLA, de charger le scénario, de charger notre agent my_agent.py et de controler le véhicule du scénario avec le code de my_agent.
+
+- operators/oasis_agent/my_agent : afin de controler le véhicule du scénario, my_agent doit renvoyer un objet du type VehicleControl, qui modélise l'accélérateur du véhicule, les freins du véhicule etc... Il est également chargé de recevoir les informations des capteurs établis sur la voiture et de les communiquer dans le réseau afin qu'ils soient récupéré par les bons opérateurs et traités correctement.
+
+- operators/yolov_filter : Directement "branché" après l'opérateur principal, il s'occupe de traiter la première image issue de la caméra afin d'en extraire les informations pertinentes à l'aide du machine learning. Il renvoie des informations importantes sur l'existence et l'emplacement sur la caméra des éléments extérieurs.
+
+- operators/plot : Cet opérateur récupère divers informations (actuellement l'image et les informations de yolov_filter) et les affiche sur une fenêtre 640x640 (je ne comprend pas ce qui coince quand je veux mettre plus grand...)
+
+## Lancement
+
+Pour lancer le programme, après avoir procédé à un Dora Up et avoir allumé le serveur, il faut lancer Dora Start. Vous devriez voir quelque chose dans le terminal, il s'agit d'un identifiant de notre lancement. ça permet de débugger et d'accéder aux logs.
+
+![](https://github.com/Hennzau/Autonomous-Driving/blob/main/docs/6.png)
+
+ Le premier lancement peut mettre très longtemps à s'éxécuter, en fait c'est le serveur Carla qui coince : la map met très longtemps à charger la première fois (elle est ensuite mise en cache). Après une trentaine de seconde la première fois vous devriez observer une fenêtre qui s'ouvre, mais pas en premier plan, vous pouvez y accéder depuis la barre des tâches en bas :
+
+ ![](https://github.com/Hennzau/Autonomous-Driving/blob/main/docs/7.png)
+ ![](https://github.com/Hennzau/Autonomous-Driving/blob/main/docs/8.png)
  
