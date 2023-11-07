@@ -1,0 +1,34 @@
+nodes:
+  - id: oasis_agent
+    custom:
+      inputs:
+        tick: dora/timer/millis/16
+      outputs:
+        - image
+        - opendrive
+        - speed
+        - objective_waypoints
+        - position
+        - lidar_pc
+      source: python3
+      args: ./operators/oasis_agent/oasis_agent.py
+
+  - id: plot
+    operator:
+      python: operators/plot/plot.py
+      inputs:
+        bbox: bbox_recognition/bbox
+        image: oasis_agent/image
+
+  - id: bbox_recognition
+    operator:
+      outputs:
+        - bbox
+      inputs:
+        image: oasis_agent/image
+      python: operators/bbox_recognition/yolov5_op.py
+    env:
+      PYTORCH_DEVICE: cuda
+      YOLOV5_PATH: dependencies/yolov5
+      YOLOV5_WEIGHT_PATH: dependencies/yolov5/yolov5n.pt
+

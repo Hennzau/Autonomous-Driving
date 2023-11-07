@@ -21,6 +21,9 @@ class Operator:
         self.width = 640
         self.height = 640
 
+        self.image = np.zeros((self.width, self.height, 4))
+        self.obstacles = []
+
         print("Plot connected and ready to display something")
 
     def on_event(
@@ -44,10 +47,23 @@ class Operator:
             ).reshape((self.width, self.height, 4))
 
             resized_image = camera_frame[:, :, :3]
-            resized_image = np.ascontiguousarray(resized_image, np.uint8)
+            self.image = np.ascontiguousarray(resized_image, np.uint8)
 
-            cv2.imshow("image", resized_image)
-            cv2.waitKey(1)
+        elif "bbox" == dora_input["id"]:
+            self.obstacles = np.frombuffer(
+                dora_input["data"], np.int32
+            ).reshape((-1, 6))
+
+        for obstacle in self.obstacles:
+            [min_x, max_x, min_y, max_y, confidence, label] = obstacle
+
+            start = (int(min_x), int(min_y))
+            end = (int(max_x), int(max_y))
+
+            cv2.rectangle(self.image, start, end, (0, 255, 0), 2)
+
+        cv2.imshow("image", self.image)
+        cv2.waitKey(1)
 
         return DoraStatus.CONTINUE
 
