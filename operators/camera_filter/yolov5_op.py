@@ -36,6 +36,8 @@ class Operator:
         self.model.to(torch.device(DEVICE))
         self.model.eval()
 
+        self.camera_position = np.array([]).tobytes()
+
     def on_event(
             self,
             dora_event: dict,
@@ -50,7 +52,10 @@ class Operator:
             dora_input: dict,
             send_output: Callable[[str, bytes], None],
     ) -> DoraStatus:
-        if dora_input["id"] == "image":
+        if dora_input["id"] == "camera_position":
+            self.camera_position = dora_input["data"]
+
+        if dora_input["id"] == "camera_image":
             frame = np.frombuffer(
                 dora_input["data"],
                 np.uint8,
@@ -67,6 +72,7 @@ class Operator:
             arrays = arrays.tobytes()
 
             send_output("bbox", arrays)
-            send_output("image", dora_input["data"])
+            send_output("camera_position", self.camera_position)
+            send_output("camera_image", dora_input["data"])
 
         return DoraStatus.CONTINUE

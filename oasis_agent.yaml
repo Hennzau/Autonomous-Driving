@@ -4,32 +4,48 @@ nodes:
       inputs:
         tick: dora/timer/millis/16
       outputs:
-        - image
         - opendrive
-        - speed
-        - objective_waypoints
-        - position
-        - lidar_pc
+        - camera_image
+        - camera_position
+        - ego_speed
+        - ego_position
+        - ego_world_destination
       source: python3
       args: ./operators/oasis_agent/oasis_agent.py
 
-  - id: yolov_filter
+  - id: camera_filter
     operator:
+      inputs:
+        camera_image: oasis_agent/camera_image
+        camera_position: oasis_agent/camera_position
       outputs:
         - bbox
-        - image
-      inputs:
-        image: oasis_agent/image
-      python: operators/yolov_filter/yolov5_op.py
+        - camera_image
+        - camera_position
+      python: operators/camera_filter/yolov5_op.py
     env:
       PYTORCH_DEVICE: cuda
       YOLOV5_PATH: dependencies/yolov5
       YOLOV5_WEIGHT_PATH: dependencies/yolov5/yolov5n.pt
 
+  - id: global_route_planner
+    operator:
+      python: operators/global_route_planner/global_route_planner.py
+      inputs:
+        opendrive: oasis_agent/opendrive
+        ego_position: oasis_agent/ego_position
+        ego_world_destination: oasis_agent/ego_world_destination
+
+      outputs:
+        - world_waypoints
+
   - id: plot
     operator:
       python: operators/plot/plot.py
       inputs:
-        bbox: yolov_filter/bbox
-        image: yolov_filter/image
+        bbox: camera_filter/bbox
+        camera_image: camera_filter/camera_image
+        camera_position: camera_filter/camera_position
+
+        world_waypoints: global_route_planner/world_waypoints
 
