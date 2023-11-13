@@ -1,6 +1,8 @@
 nodes:
   - id: oasis_agent
     custom:
+      source: python3
+      args: ../../carla/oasis_agent.py
       inputs:
         tick: dora/timer/millis/16
       outputs:
@@ -10,11 +12,10 @@ nodes:
         - ego_speed
         - ego_position
         - ego_world_destination
-      source: python3
-      args: ./operators/oasis_agent/oasis_agent.py
 
   - id: camera_filter
     operator:
+      python: ../../operators/yolov5_op.py
       inputs:
         camera_image: oasis_agent/camera_image
         camera_position: oasis_agent/camera_position
@@ -22,7 +23,6 @@ nodes:
         - bbox
         - camera_image
         - camera_position
-      python: operators/camera_filter/yolov5_op.py
     env:
       PYTORCH_DEVICE: cuda
       YOLOV5_PATH: dependencies/yolov5
@@ -30,7 +30,7 @@ nodes:
 
   - id: global_route_planner
     operator:
-      python: operators/global_route_planner/global_route_planner.py
+      python: ../../operators/global_route_planner.py
       inputs:
         opendrive: oasis_agent/opendrive
         ego_position: oasis_agent/ego_position
@@ -41,7 +41,7 @@ nodes:
 
   - id: plot
     operator:
-      python: operators/plot/plot.py
+      python: ../../operators/plot.py
       inputs:
         bbox: camera_filter/bbox
         camera_image: camera_filter/camera_image

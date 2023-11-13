@@ -363,7 +363,7 @@ class GenericLogger:
             self.wandb.log({name: [wandb.Image(str(f), caption=f.name) for f in files]}, step=epoch)
 
     def log_graph(self, model, imgsz=(640, 640)):
-        # Log model graph to all loggers
+        # Log model graphs to all loggers
         if self.tb:
             log_tensorboard_graph(self.tb, model, imgsz)
 
@@ -381,7 +381,7 @@ class GenericLogger:
 
 
 def log_tensorboard_graph(tb, model, imgsz=(640, 640)):
-    # Log model graph to TensorBoard
+    # Log model graphs to TensorBoard
     try:
         p = next(model.parameters())  # for device, type
         imgsz = (imgsz, imgsz) if isinstance(imgsz, int) else imgsz  # expand
