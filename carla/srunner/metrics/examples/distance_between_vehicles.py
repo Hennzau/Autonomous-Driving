@@ -51,7 +51,7 @@ class DistanceBetweenVehicles(BasicMetric):
             ego_location = log.get_actor_transform(ego_id, i).location
             adv_location = log.get_actor_transform(adv_id, i).location
 
-            # Filter some points for a better graph
+            # Filter some points for a better graphs
             if adv_location.z < -10:
                 continue
 

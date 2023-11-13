@@ -32,7 +32,7 @@ class GlobalRoutePlanner(object):
         self._intersection_end_node = -1
         self._previous_decision = RoadOption.VOID
 
-        # Build the graph
+        # Build the graphs
         self._build_topology()
         self._build_graph()
         self._find_loose_ends()
@@ -117,8 +117,8 @@ class GlobalRoutePlanner(object):
 
     def _build_graph(self):
         """
-        This function builds a networkx graph representation of topology, creating several class attributes:
-        - graph (networkx.DiGraph): networkx graph representing the world map, with:
+        This function builds a networkx graphs representation of topology, creating several class attributes:
+        - graphs (networkx.DiGraph): networkx graphs representing the world map, with:
             Node properties:
                 vertex: (x,y,z) position in world map
             Edge properties:
@@ -127,7 +127,7 @@ class GlobalRoutePlanner(object):
                 net_vector: unit vector of the chord from entry to exit
                 intersection: boolean indicating if the edge belongs to an  intersection
         - id_map (dictionary): mapping from (x,y,z) to node id
-        - road_id_to_edge (dictionary): map from road id to edge in the graph
+        - road_id_to_edge (dictionary): map from road id to edge in the graphs
         """
 
         self._graph = nx.DiGraph()
@@ -173,7 +173,7 @@ class GlobalRoutePlanner(object):
     def _find_loose_ends(self):
         """
         This method finds road segments that have an unconnected end, and
-        adds them to the internal graph representation
+        adds them to the internal graphs representation
         """
         count_loose_ends = 0
         hop_resolution = self._sampling_resolution
@@ -216,7 +216,7 @@ class GlobalRoutePlanner(object):
 
     def _lane_change_link(self):
         """
-        This method places zero cost links in the topology graph
+        This method places zero cost links in the topology graphs
         representing availability of lane changes.
         """
 
@@ -284,7 +284,7 @@ class GlobalRoutePlanner(object):
         using A* search with distance heuristic.
         origin      :   carla.Location object of start position
         destination :   carla.Location object of of end position
-        return      :   path as list of node ids (as int) of the graph self._graph
+        return      :   path as list of node ids (as int) of the graphs self._graph
         connecting origin and destination
         """
         start, end = self._localize(origin), self._localize(destination)
